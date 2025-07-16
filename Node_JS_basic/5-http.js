@@ -11,26 +11,42 @@ function countStudents(path) {
         return;
       }
 
-      const lines = data.split('\n').filter(line => line.trim() !== '');
-      const header = lines.shift();
-      const studentsByField = {};
+      const fileLines = data
+        .toString('utf-8')
+        .trim()
+        .split('\n')
+        .filter((line) => line.trim() !== '');
 
-      for (const line of lines) {
-        const tokens = line.split(',');
-        if (tokens.length < 4) continue;
-        const field = tokens[3];
-        if (!studentsByField[field]) {
-          studentsByField[field] = [];
+      const studentGroups = {};
+      const dbFieldNames = fileLines[0].split(',');
+      const studentPropNames = dbFieldNames.slice(0, dbFieldNames.length - 1);
+
+      for (const line of fileLines.slice(1)) {
+        const studentRecord = line.split(',');
+        if (studentRecord.length < dbFieldNames.length) continue; // skip empty/incomplete lines
+        const studentPropValues = studentRecord.slice(0, studentRecord.length - 1);
+        const field = studentRecord[studentRecord.length - 1];
+
+        if (!Object.keys(studentGroups).includes(field)) {
+          studentGroups[field] = [];
         }
-        studentsByField[field].push(tokens[0]);
+
+        const studentEntries = studentPropNames
+          .map((propName, idx) => [propName, studentPropValues[idx]]);
+        studentGroups[field].push(Object.fromEntries(studentEntries));
       }
 
-      let output = `Number of students: ${lines.length}`;
-      for (const [field, names] of Object.entries(studentsByField)) {
-        output += `\nNumber of students in ${field}: ${names.length}. List: ${names.join(', ')}`;
+      const totalStudents = Object
+        .values(studentGroups)
+        .reduce((pre, cur) => pre + cur.length, 0);
+
+      let result = `Number of students: ${totalStudents}`;
+      for (const [field, group] of Object.entries(studentGroups)) {
+        const studentNames = group.map((student) => student.firstname).join(', ');
+        result += `\nNumber of students in ${field}: ${group.length}. List: ${studentNames}`;
       }
 
-      resolve(output);
+      resolve(result);
     });
   });
 }
@@ -46,15 +62,14 @@ const app = http.createServer((req, res) => {
       .then((output) => {
         res.end(`This is the list of our students\n${output}`);
       })
-      .catch((err) => {
+      .catch(() => {
         res.end('This is the list of our students\nCannot load the database');
       });
   } else {
     res.statusCode = 404;
-    res.end('Not found');
+    res.end('Not Found');
   }
 });
 
 app.listen(1245);
-
 module.exports = app;
